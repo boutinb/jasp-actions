@@ -19,7 +19,7 @@ runs:
   steps:
     - name: Check the runner
       run: |
-        # The Linux SyntaxInterface library is built on ubuntu-latest and links that release's ICU (libicu74).
+        # The Linux SyntaxInterface library is built on ubuntu-24.04 and links its libraries (libicu74, libmysqlclient21, ...).
         if [ "${{ runner.os }}" != 'Linux' ] || ! grep -q 'VERSION_ID="24.04"' /etc/os-release; then
           echo "::error::update-wrappers needs an ubuntu-24.04 runner, the pre-built SyntaxInterface library is built for it."
           exit 1
