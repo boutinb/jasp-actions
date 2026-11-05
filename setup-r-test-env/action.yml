@@ -164,7 +164,16 @@ runs:
       run: |
         # Install pak
         echo "::group::Install pak"
-        if which sudo >/dev/null; then SUDO="sudo -E --preserve-env=PATH,R_LIB_FOR_PAK env"; else SUDO=""; fi
+        # Only escalate when the runner cannot write the target library. With renv,
+        # R_LIB_FOR_PAK is the project library in the runner's home, and renv's
+        # install.packages() shim installs into the project library it derives
+        # from HOME. sudo on ubuntu-26.04 (sudo-rs) ignores -E and resets HOME, so
+        # under sudo pak landed in /root's renv library and later steps could not
+        # find it.
+        SUDO=""
+        if ! mkdir -p "$R_LIB_FOR_PAK" 2>/dev/null || [ ! -w "$R_LIB_FOR_PAK" ]; then
+          if which sudo >/dev/null; then SUDO="sudo -E --preserve-env=PATH,R_LIB_FOR_PAK env"; fi
+        fi
         $SUDO R -q -e 'dir.create(Sys.getenv("R_LIB_FOR_PAK"), recursive = TRUE, showWarnings = FALSE)'
         $SUDO R -q -e 'if (FALSE) { install.packages("pak", lib = Sys.getenv("R_LIB_FOR_PAK")) } else { install.packages("pak", lib = Sys.getenv("R_LIB_FOR_PAK"), repos = sprintf("https://r-lib.github.io/p/pak/%s/%s/%s/%s", "stable", .Platform$pkgType, R.Version()$os, R.Version()$arch)) }'
         echo "::endgroup::"
