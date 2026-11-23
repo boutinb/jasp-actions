@@ -52,9 +52,14 @@ jobs:
           packages: lockfile
           needs-jags: ${{ inputs.needs_JAGS }}
 
-      - name: Install covr if missing from lockfile
+      - name: Install covr 3.6.5
+        # covr 4.0.0 no longer passes its library paths as site libraries; in
+        # these renv projects the R process running the tests then cannot find
+        # the package covr just installed ("there is no package called ..."),
+        # so no test runs at all. Pin 3.6.5 until that is resolved.
         run: |
-          if (!require("covr")) renv::install("covr")
+          if (!requireNamespace("covr", quietly = TRUE) || packageVersion("covr") != "3.6.5")
+            renv::install("covr@3.6.5")
         shell: Rscript {0}
 
       - name: Copy examples to inst (allows coverage testing for examples)
