@@ -12,6 +12,14 @@ Common environment settings are exported through `GITHUB_ENV` and remain
 available to the subsequent test or coverage steps. The caller supplies
 `GITHUB_PAT`; the action does not accept or record credentials.
 
+jaspTools imports [jaspSyntax](https://github.com/jasp-stats/jaspSyntax), which
+is published as binary packages on the
+[jasp-stats R-universe](https://jasp-stats.r-universe.dev). The action adds the
+universe to the `repos` of R (pak ignores the `Additional_repositories` field of
+jaspTools) and, in lockfile mode, installs jaspSyntax from it before
+`renv::install("jasp-stats/jaspTools")`, because renv ignores that field too and
+`RENV_CONFIG_REPOS_OVERRIDE` replaces the repositories it uses.
+
 The workflows retain their own job matrices, schedule checks, unit tests,
 environment artifacts, coverage calculation, and Codecov upload. Coverage
 uses the same Linux/lockfile setup as unit tests, including installing JAGS
@@ -61,7 +69,7 @@ window; artifact expiry does not remove copies already stored by the dashboard.
 
 ## Update R wrappers
 
-`.github/workflows/update-wrappers.yml` regenerates the R wrappers of a module (`R/<analysis>Wrapper.R`) and their help files (`man/*.Rd`) from its QML forms, and commits them when they changed. It installs [jaspSyntax](https://github.com/jasp-stats/jaspSyntax) with the pre-built SyntaxInterface library from its GitHub release, so nothing of JASP is built. Modules that do not set `hasWrappers: true` in `inst/Description.qml` are skipped.
+`.github/workflows/update-wrappers.yml` regenerates the R wrappers of a module (`R/<analysis>Wrapper.R`) and their help files (`man/*.Rd`) from its QML forms, and commits them when they changed. It installs [jaspSyntax](https://github.com/jasp-stats/jaspSyntax) from the [jasp-stats R-universe](https://jasp-stats.r-universe.dev), or from GitHub when the `jaspsyntax_ref` or `syntaxinterface_release` input is set, with the pre-built SyntaxInterface library from its GitHub release, so nothing of JASP is built. Modules that do not set `hasWrappers: true` in `inst/Description.qml` are skipped.
 
 Add this as `.github/workflows/update-wrappers.yml` to a module:
 

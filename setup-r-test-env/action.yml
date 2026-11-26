@@ -47,6 +47,9 @@ runs:
       with:
         r-version: ${{ inputs.r-version }}
         Ncpus: 1
+        # jaspSyntax, which jaspTools imports, is published here. pak (pkg_sysreqs and
+        # setup-r-dependencies) ignores the Additional_repositories field of jaspTools.
+        extra-repositories: https://jasp-stats.r-universe.dev
 
     - name: Install system dependencies on macOS
       if: runner.os == 'macOS'
@@ -240,7 +243,14 @@ runs:
     - name: Install jaspTools if missing from lockfile
       if: inputs.packages == 'lockfile'
       run: |
-        if (!require("jaspTools")) renv::install("jasp-stats/jaspTools")
+        if (!require("jaspTools")) {
+          # renv ignores the Additional_repositories field of jaspTools, and RENV_CONFIG_REPOS_OVERRIDE
+          # replaces the repositories renv uses, so jaspSyntax is installed from its R-universe first.
+          if (!requireNamespace("jaspSyntax", quietly = TRUE))
+            utils::install.packages("jaspSyntax", repos = c(jasp = "https://jasp-stats.r-universe.dev",
+                                                           CRAN = Sys.getenv("RENV_CONFIG_REPOS_OVERRIDE")))
+          renv::install("jasp-stats/jaspTools")
+        }
       shell: Rscript {0}
 
     - uses: r-lib/actions/setup-r-dependencies@v2
