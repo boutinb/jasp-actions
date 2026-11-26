@@ -294,7 +294,9 @@ runs:
           utils::install.packages("jaspSyntax", repos = c(jasp = universe, CRAN = cran))
         }
         desc <- utils::packageDescription("jaspSyntax")
-        cat("jaspSyntax", desc$Version, "from", if (is.null(desc$RemoteSha)) desc$Repository else paste0("GitHub ", desc$RemoteSha), "\n")
+        # An R-universe build records its commit too, so look at Repository first
+        from <- if (!is.null(desc$Repository)) desc$Repository else paste0("GitHub ", desc$RemoteRef)
+        cat("jaspSyntax", desc$Version, "from", from, "commit", desc$RemoteSha, "\n")
       shell: Rscript {0}
 
     - name: Install jaspTools if missing from lockfile
