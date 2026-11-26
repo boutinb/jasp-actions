@@ -13,6 +13,14 @@ inputs:
     description: 'Whether JAGS is required (true or false).'
     required: false
     default: 'false'
+  jasp-version:
+    description: 'JASP version to run the analyses with: development, or the tag of a JASP release (e.g. v0.99.1). Empty means development.'
+    required: false
+    default: 'development'
+  jaspsyntax-source:
+    description: 'Where the jaspSyntax of the development version comes from: r-universe (built from jaspSyntax master) or github (jaspSyntax master, built here). A release tag always comes from github.'
+    required: false
+    default: 'r-universe'
 
 runs:
   using: composite
@@ -20,11 +28,24 @@ runs:
     - name: Configure the test environment
       env:
         PACKAGE_SETUP: ${{ inputs.packages }}
+        JASP_VERSION: ${{ inputs.jasp-version || 'development' }}
+        JASPSYNTAX_SOURCE: ${{ inputs.jaspsyntax-source || 'r-universe' }}
       run: |
         case "$PACKAGE_SETUP" in
           lockfile|latest) ;;
           *) echo "::error::packages must be lockfile or latest"; exit 1 ;;
         esac
+        case "$JASPSYNTAX_SOURCE" in
+          r-universe|github) ;;
+          *) echo "::error::jaspsyntax-source must be r-universe or github"; exit 1 ;;
+        esac
+        if ! [[ "$JASP_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::jasp-version must be development or the tag of a JASP release, e.g. v0.99.1"; exit 1
+        fi
+        # jaspTools::setupJaspTools() reads JASPTOOLS_JASP_VERSION
+        echo "JASPTOOLS_JASP_VERSION=$JASP_VERSION" >> "$GITHUB_ENV"
+        echo "JASPSYNTAX_SOURCE=$JASPSYNTAX_SOURCE" >> "$GITHUB_ENV"
+        echo "JASP version: $JASP_VERSION, jaspSyntax of the development version from: $JASPSYNTAX_SOURCE"
         # GITHUB_ENV also makes these settings available to the caller's
         # subsequent test or coverage steps.
         cat >> "$GITHUB_ENV" <<'EOF'
@@ -247,19 +268,6 @@ runs:
       with:
         cache-version: 6
 
-    - name: Install jaspTools if missing from lockfile
-      if: inputs.packages == 'lockfile'
-      run: |
-        if (!require("jaspTools")) {
-          # renv ignores the Additional_repositories field of jaspTools, and RENV_CONFIG_REPOS_OVERRIDE
-          # replaces the repositories renv uses, so jaspSyntax is installed from its R-universe first.
-          if (!requireNamespace("jaspSyntax", quietly = TRUE))
-            utils::install.packages("jaspSyntax", repos = c(jasp = "https://jasp-stats.r-universe.dev",
-                                                           CRAN = Sys.getenv("RENV_CONFIG_REPOS_OVERRIDE")))
-          renv::install("jasp-stats/jaspTools")
-        }
-      shell: Rscript {0}
-
     - uses: r-lib/actions/setup-r-dependencies@v2
       if: inputs.packages == 'latest'
       with:
@@ -268,6 +276,34 @@ runs:
           github::jasp-stats/jaspTools
         needs: check
         cache-version: 3
+
+    # After setup-r-dependencies, which would otherwise replace it (and may restore one from its cache).
+    # A release tag is installed by jaspTools::setupJaspTools() below; jaspTools only needs some jaspSyntax to install.
+    - name: Install jaspSyntax
+      run: |
+        universe <- "https://jasp-stats.r-universe.dev"
+        cran     <- Sys.getenv("RENV_CONFIG_REPOS_OVERRIDE")
+        fromGithub <- Sys.getenv("JASPSYNTAX_SOURCE") == "github" && Sys.getenv("JASPTOOLS_JASP_VERSION") == "development"
+        if (fromGithub) {
+          if ("${{ inputs.packages }}" == "lockfile") {
+            renv::install("jasp-stats/jaspSyntax")
+          } else {
+            remotes::install_github("jasp-stats/jaspSyntax", upgrade = "never", force = TRUE)
+          }
+        } else {
+          utils::install.packages("jaspSyntax", repos = c(jasp = universe, CRAN = cran))
+        }
+        desc <- utils::packageDescription("jaspSyntax")
+        cat("jaspSyntax", desc$Version, "from", if (is.null(desc$RemoteSha)) desc$Repository else paste0("GitHub ", desc$RemoteSha), "\n")
+      shell: Rscript {0}
+
+    - name: Install jaspTools if missing from lockfile
+      if: inputs.packages == 'lockfile'
+      run: |
+        # renv ignores the Additional_repositories field of jaspTools; jaspSyntax is installed in the step above.
+        if (!require("jaspTools"))
+          renv::install("jasp-stats/jaspTools")
+      shell: Rscript {0}
 
     - name: Install JAGS on Linux
       if: runner.os == 'Linux' && inputs.needs-jags == 'true'

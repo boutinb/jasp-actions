@@ -22,6 +22,16 @@ on:
         type: number
         required: false
         default: 30
+      jasp_version:
+        description: 'JASP version to run the analyses with: development, or the tag of a JASP release (e.g. v0.99.1). Empty means development.'
+        type: string
+        required: false
+        default: 'development'
+      jaspsyntax_source:
+        description: 'Where the jaspSyntax of the development version comes from: r-universe or github. Empty means r-universe.'
+        type: string
+        required: false
+        default: 'r-universe'
 
 jobs:
   scheduled-run-check:
@@ -47,7 +57,7 @@ jobs:
     if: needs.scheduled-run-check.outputs.status == 'success'
 
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} (R ${{ matrix.r }} - ${{ matrix.packages }} packages)
+    name: ${{ matrix.os }} (R ${{ matrix.r }} - ${{ matrix.packages }} packages - JASP ${{ inputs.jasp_version || 'development' }})
     continue-on-error: ${{ matrix.packages == 'latest' }}
 
     strategy:
@@ -73,6 +83,8 @@ jobs:
           r-version: ${{ matrix.r }}
           packages: ${{ matrix.packages }}
           needs-jags: ${{ inputs.needs_JAGS }}
+          jasp-version: ${{ inputs.jasp_version }}
+          jaspsyntax-source: ${{ inputs.jaspsyntax_source }}
 
       - name: Record unit-test environment
         id: record-test-environment
