@@ -51,6 +51,13 @@ runs:
         # setup-r-dependencies) ignores the Additional_repositories field of jaspTools.
         extra-repositories: https://jasp-stats.r-universe.dev
 
+    # jaspSyntax needs libOpenGL.so.0 and libEGL.so.1. pak does not install them: the R-universe index
+    # lists its SystemRequirements as only c++ (when it came from GitHub, pak read them from its DESCRIPTION).
+    - name: Install OpenGL on Linux
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y libopengl0 libegl1
+      shell: bash
+
     - name: Install system dependencies on macOS
       if: runner.os == 'macOS'
       uses: r-hub/actions/setup-r-sysreqs@v1
