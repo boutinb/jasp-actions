@@ -7,18 +7,34 @@ centralized location for custom jasp-actions
 Unit tests and coverage both use `setup-r-test-env/action.yml`. Change R/package
 installation, system dependencies, JAGS setup, cache settings, and jaspTools
 setup there so the workflows stay aligned. The action accepts `r-version`,
-`packages` (`lockfile` or `latest`), and `needs-jags` (`true` or `false`).
+`packages` (`lockfile` or `latest`), `needs-jags` (`true` or `false`),
+`jasp-version` and `jaspsyntax-source` (see below).
 Common environment settings are exported through `GITHUB_ENV` and remain
 available to the subsequent test or coverage steps. The caller supplies
 `GITHUB_PAT`; the action does not accept or record credentials.
 
 jaspTools imports [jaspSyntax](https://github.com/jasp-stats/jaspSyntax), which
-is published as binary packages on the
-[jasp-stats R-universe](https://jasp-stats.r-universe.dev). The action adds the
-universe to the `repos` of R (pak ignores the `Additional_repositories` field of
-jaspTools) and, in lockfile mode, installs jaspSyntax from it before
-`renv::install("jasp-stats/jaspTools")`, because renv ignores that field too and
-`RENV_CONFIG_REPOS_OVERRIDE` replaces the repositories it uses.
+is published on the [jasp-stats R-universe](https://jasp-stats.r-universe.dev).
+The action adds the universe to the `repos` of R (pak ignores the
+`Additional_repositories` field of jaspTools) and installs jaspSyntax in its own
+step, after the other R packages so that neither pak nor a cached library replaces
+it, and before `renv::install("jasp-stats/jaspTools")` in lockfile mode (renv
+ignores that field too, and `RENV_CONFIG_REPOS_OVERRIDE` replaces its repositories).
+On Linux it also installs `libopengl0` and `libegl1`, which jaspSyntax needs: the
+universe index does not list them, so pak does not install them.
+
+The JASP version the analyses run with is chosen with two inputs, which the reusable
+unit-test workflow passes on as `jasp_version` and `jaspsyntax_source`:
+
+- `jasp-version`: `development` (default), or the tag of a JASP release (e.g.
+  `v0.99.0.2`). It is exported as `JASPTOOLS_JASP_VERSION`, so
+  `jaspTools::setupJaspTools()` installs the jaspSyntax of that release from GitHub
+  and takes the html files and data sets of the jasp-desktop commit it was built from.
+- `jaspsyntax-source`: where the jaspSyntax of the development version comes from,
+  `r-universe` (default) or `github` (jaspSyntax `master`, built in the job).
+
+Empty values mean the defaults, so a module can pass its `workflow_dispatch` inputs
+straight through and still get development and r-universe on other events.
 
 The workflows retain their own job matrices, schedule checks, unit tests,
 environment artifacts, coverage calculation, and Codecov upload. Coverage
