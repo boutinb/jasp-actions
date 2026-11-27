@@ -4,66 +4,27 @@ on:
     branches: [tmpDebugWinDownload]
 jobs:
   debug:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: r-lib/actions/setup-r@v2
+      - uses: actions/checkout@v6
         with:
-          r-version: '4.5.2'
-      - name: Install httr and renv
-        run: install.packages(c("httr", "renv"), repos = "https://cloud.r-project.org")
-        shell: Rscript {0}
-      - name: Install jaspTools
+          repository: jasp-stats/jaspDescriptives
+      - name: Set up the test environment (development)
+        uses: boutinb/jasp-actions/setup-r-test-env@rUniverseCheckbox
+        with:
+          packages: lockfile
+      - name: Release check in the module's renv project
         run: |
-          install.packages("remotes", repos = "https://cloud.r-project.org")
-          options(repos = c(jasp = "https://jasp-stats.r-universe.dev", CRAN = "https://cloud.r-project.org"))
-          remotes::install_github("jasp-stats/jaspTools", upgrade = "never")
-        shell: Rscript {0}
-        env:
-          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      - name: jaspTools release check
-        env:
-          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-          JASPTOOLS_JASP_VERSION: v0.99.0.2
-        run: |
-          print(system.time(print(jaspTools:::jaspSyntaxReleaseExists("v0.99.0.2"))))
-          url <- sprintf("https://github.com/%s/releases/download/%s/SHA256SUMS", jaspTools:::jaspSyntaxReleaseRepo, "v0.99.0.2")
-          print(url)
-          f <- tempfile()
-          print(utils::download.file(url, destfile = f, quiet = FALSE, mode = "wb"))
-          print(file.exists(f))
-          print(system.time(print(try(jaspTools:::readJaspVersion("v0.99.0.2")))))
-        shell: Rscript {0}
-      - name: Write the probe
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/probe"
-          cat > "$RUNNER_TEMP/probe.R" <<'RS'
+          cat("method option:", format(getOption("download.file.method")), "| timeout:", getOption("timeout"),
+              "| download.file is base:", identical(utils::download.file, get("download.file", envir = asNamespace("utils"))), "\n")
+          print(Sys.getenv(c("R_LIBCURL_SSL_REVOKE_BEST_EFFORT", "CURL_CA_BUNDLE", "http_proxy", "https_proxy")))
           url <- "https://github.com/jasp-stats/jaspSyntax/releases/download/v0.99.0.2/SHA256SUMS"
-          cat("R", R.version.string, "| method option:", format(getOption("download.file.method")), "| timeout:", getOption("timeout"), "| libcurl:", capabilities("libcurl"), "\n")
-          try1 <- function(label, expr) {
-            t <- system.time(r <- try(expr, silent = TRUE))[["elapsed"]]
-            cat(sprintf("%-22s %6.1fs  %s\n", label, t, if (inherits(r, "try-error")) paste("ERROR:", conditionMessage(attr(r, "condition"))) else paste("ok:", format(r))))
-          }
-          options(timeout = 120)
-          try1("download default", utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb"))
-          try1("download libcurl", utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb", method = "libcurl"))
-          if (.Platform$OS.type == "windows")
-            try1("download wininet", suppressWarnings(utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb", method = "wininet")))
-          try1("curlGetHeaders", attr(curlGetHeaders(url), "status"))
-          try1("httr::HEAD", httr::status_code(httr::HEAD(url)))
-          try1("httr::GET", httr::status_code(httr::GET(url)))
-          RS
-      - name: Probe in plain R
-        run: Rscript "$RUNNER_TEMP/probe.R"
-        shell: bash
-      - name: Probe in an renv project
-        shell: bash
-        run: |
-          cd "$RUNNER_TEMP/probe"
-          Rscript -e 'renv::init(bare = TRUE, restart = FALSE)' > /dev/null 2>&1 || true
-          ls -a
-          Rscript "$RUNNER_TEMP/probe.R"
+          f <- tempfile()
+          print(system.time(r <- try(utils::download.file(url, destfile = f, quiet = FALSE, mode = "wb"))))
+          print(r); print(file.exists(f))
+          print(system.time(print(jaspTools:::jaspSyntaxReleaseExists("v0.99.0.2"))))
+          print(packageVersion("jaspTools")); print(utils::packageDescription("jaspTools")$RemoteSha)
+          print(body(jaspTools:::jaspSyntaxReleaseExists))
+        shell: Rscript {0}
