@@ -32,6 +32,11 @@ on:
         type: string
         required: false
         default: 'r-universe'
+      jaspsyntax_ref:
+        description: 'jaspSyntax branch, tag or commit for jaspsyntax_source github. Empty means master.'
+        type: string
+        required: false
+        default: ''
 
 jobs:
   scheduled-run-check:
@@ -85,6 +90,7 @@ jobs:
           needs-jags: ${{ inputs.needs_JAGS }}
           jasp-version: ${{ inputs.jasp_version }}
           jaspsyntax-source: ${{ inputs.jaspsyntax_source }}
+          jaspsyntax-ref: ${{ inputs.jaspsyntax_ref }}
 
       - name: Record unit-test environment
         id: record-test-environment
