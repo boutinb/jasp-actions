@@ -17,8 +17,12 @@ inputs:
     description: 'JASP version to run the analyses with: development, or the tag of a JASP release (e.g. v0.99.1). Empty means development.'
     required: false
     default: 'development'
+  jaspsyntax:
+    description: 'The jaspSyntax of the development version: r-universe (built from jaspSyntax master), or a jaspSyntax branch, tag or commit on GitHub, built here (its configure picks the SyntaxInterface library). Empty means jaspsyntax-source.'
+    required: false
+    default: ''
   jaspsyntax-source:
-    description: 'Where the jaspSyntax of the development version comes from: r-universe (built from jaspSyntax master) or github (jaspSyntax master, built here). A release tag always comes from github.'
+    description: 'Older form of jaspsyntax, used when that is empty: r-universe or github (jaspSyntax master).'
     required: false
     default: 'r-universe'
 
@@ -29,23 +33,36 @@ runs:
       env:
         PACKAGE_SETUP: ${{ inputs.packages }}
         JASP_VERSION: ${{ inputs.jasp-version || 'development' }}
+        JASPSYNTAX: ${{ inputs.jaspsyntax }}
         JASPSYNTAX_SOURCE: ${{ inputs.jaspsyntax-source || 'r-universe' }}
       run: |
         case "$PACKAGE_SETUP" in
           lockfile|latest) ;;
           *) echo "::error::packages must be lockfile or latest"; exit 1 ;;
         esac
-        case "$JASPSYNTAX_SOURCE" in
-          r-universe|github) ;;
-          *) echo "::error::jaspsyntax-source must be r-universe or github"; exit 1 ;;
-        esac
+        if [ -z "$JASPSYNTAX" ]; then
+          case "$JASPSYNTAX_SOURCE" in
+            r-universe) JASPSYNTAX=r-universe ;;
+            # A release tag ignores it, as before jaspsyntax existed
+            github)     if [ "$JASP_VERSION" = "development" ]; then JASPSYNTAX=master; else JASPSYNTAX=r-universe; fi ;;
+            *) echo "::error::jaspsyntax-source must be r-universe or github"; exit 1 ;;
+          esac
+        fi
         if ! [[ "$JASP_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
           echo "::error::jasp-version must be development or the tag of a JASP release, e.g. v0.99.1"; exit 1
         fi
         # jaspTools::setupJaspTools() reads JASPTOOLS_JASP_VERSION
         echo "JASPTOOLS_JASP_VERSION=$JASP_VERSION" >> "$GITHUB_ENV"
-        echo "JASPSYNTAX_SOURCE=$JASPSYNTAX_SOURCE" >> "$GITHUB_ENV"
-        echo "JASP version: $JASP_VERSION, jaspSyntax of the development version from: $JASPSYNTAX_SOURCE"
+        if ! [[ "$JASPSYNTAX" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          echo "::error::jaspsyntax must be r-universe or a branch, tag or commit of jaspSyntax"; exit 1
+        fi
+        if [ "$JASPSYNTAX" != "r-universe" ] && [ "$JASP_VERSION" != "development" ]; then
+          echo "::error::jaspsyntax $JASPSYNTAX only applies to jasp-version development: JASP $JASP_VERSION uses the jaspSyntax of that release"; exit 1
+        fi
+        # JASPSYNTAX_REF is the GitHub ref; empty means the R-universe
+        if [ "$JASPSYNTAX" = "r-universe" ]; then JASPSYNTAX_REF=""; else JASPSYNTAX_REF="$JASPSYNTAX"; fi
+        echo "JASPSYNTAX_REF=$JASPSYNTAX_REF" >> "$GITHUB_ENV"
+        echo "JASP version: $JASP_VERSION, jaspSyntax of the development version from: ${JASPSYNTAX_REF:+GitHub }$JASPSYNTAX"
         # GITHUB_ENV also makes these settings available to the caller's
         # subsequent test or coverage steps.
         cat >> "$GITHUB_ENV" <<'EOF'
@@ -283,12 +300,13 @@ runs:
       run: |
         universe <- "https://jasp-stats.r-universe.dev"
         cran     <- Sys.getenv("RENV_CONFIG_REPOS_OVERRIDE")
-        fromGithub <- Sys.getenv("JASPSYNTAX_SOURCE") == "github" && Sys.getenv("JASPTOOLS_JASP_VERSION") == "development"
+        fromGithub <- nzchar(Sys.getenv("JASPSYNTAX_REF")) && Sys.getenv("JASPTOOLS_JASP_VERSION") == "development"
         if (fromGithub) {
+          repo <- paste0("jasp-stats/jaspSyntax@", Sys.getenv("JASPSYNTAX_REF"))
           if ("${{ inputs.packages }}" == "lockfile") {
-            renv::install("jasp-stats/jaspSyntax")
+            renv::install(repo)
           } else {
-            remotes::install_github("jasp-stats/jaspSyntax", upgrade = "never", force = TRUE)
+            remotes::install_github(repo, upgrade = "never", force = TRUE)
           }
         } else {
           utils::install.packages("jaspSyntax", repos = c(jasp = universe, CRAN = cran))

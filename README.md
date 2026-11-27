@@ -8,7 +8,7 @@ Unit tests and coverage both use `setup-r-test-env/action.yml`. Change R/package
 installation, system dependencies, JAGS setup, cache settings, and jaspTools
 setup there so the workflows stay aligned. The action accepts `r-version`,
 `packages` (`lockfile` or `latest`), `needs-jags` (`true` or `false`),
-`jasp-version` and `jaspsyntax-source` (see below).
+`jasp-version` and `jaspsyntax` (see below).
 Common environment settings are exported through `GITHUB_ENV` and remain
 available to the subsequent test or coverage steps. The caller supplies
 `GITHUB_PAT`; the action does not accept or record credentials.
@@ -24,14 +24,19 @@ On Linux it also installs `libopengl0` and `libegl1`, which jaspSyntax needs: th
 universe index does not list them, so pak does not install them.
 
 The JASP version the analyses run with is chosen with two inputs, which the reusable
-unit-test workflow passes on as `jasp_version` and `jaspsyntax_source`:
+unit-test workflow passes on as `jasp_version` and `jaspsyntax`:
 
 - `jasp-version`: `development` (default), or the tag of a JASP release (e.g.
   `v0.99.0.2`). It is exported as `JASPTOOLS_JASP_VERSION`, so
   `jaspTools::setupJaspTools()` installs the jaspSyntax of that release from GitHub
   and takes the html files and data sets of the jasp-desktop commit it was built from.
-- `jaspsyntax-source`: where the jaspSyntax of the development version comes from,
-  `r-universe` (default) or `github` (jaspSyntax `master`, built in the job).
+- `jaspsyntax`: the jaspSyntax of the development version: `r-universe` (default,
+  built from jaspSyntax `master`), or a jaspSyntax branch, tag or commit on GitHub,
+  built in the job, e.g. `master` or the branch of a jaspSyntax pull request. Only its
+  R code comes from that ref: the SyntaxInterface library is the release its
+  `configure` points at, so jasp-desktop changes need a library build first. The
+  older `jaspsyntax-source` (`r-universe` or `github` for `master`) is still read
+  when `jaspsyntax` is empty.
 
 Empty values mean the defaults, so a module can pass its `workflow_dispatch` inputs
 straight through and still get development and r-universe on other events.
