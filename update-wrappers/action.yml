@@ -47,7 +47,12 @@ runs:
         # An empty JASPSYNTAX_RELEASE_TAG would override jaspSyntax's own default with nothing.
         if (!nzchar(Sys.getenv("JASPSYNTAX_RELEASE_TAG"))) Sys.unsetenv("JASPSYNTAX_RELEASE_TAG")
         install.packages(c("remotes", "roxygen2"))
-        remotes::install_github("jasp-stats/jaspSyntax@${{ inputs.jaspsyntax-ref }}", upgrade = "never")
+        if ("${{ inputs.jaspsyntax-ref }}" == "master" && !nzchar(Sys.getenv("JASPSYNTAX_RELEASE_TAG"))) {
+          # The jasp-stats R-universe builds jaspSyntax master with the SyntaxInterface release of its configure.
+          install.packages("jaspSyntax", repos = c(jasp = "https://jasp-stats.r-universe.dev", getOption("repos")))
+        } else {
+          remotes::install_github("jasp-stats/jaspSyntax@${{ inputs.jaspsyntax-ref }}", upgrade = "never")
+        }
         library(jaspSyntax)
       shell: Rscript {0}
 
