@@ -8,7 +8,7 @@ Unit tests and coverage both use `setup-r-test-env/action.yml`. Change R/package
 installation, system dependencies, JAGS setup, cache settings, and jaspTools
 setup there so the workflows stay aligned. The action accepts `r-version`,
 `packages` (`lockfile` or `latest`), `needs-jags` (`true` or `false`),
-`jasp-version` and `jaspsyntax` (see below).
+`r-universe` and `jaspsyntax` (see below).
 Common environment settings are exported through `GITHUB_ENV` and remain
 available to the subsequent test or coverage steps. The caller supplies
 `GITHUB_PAT`; the action does not accept or record credentials.
@@ -23,23 +23,30 @@ ignores that field too, and `RENV_CONFIG_REPOS_OVERRIDE` replaces its repositori
 On Linux it also installs `libopengl0` and `libegl1`, which jaspSyntax needs: the
 universe index does not list them, so pak does not install them.
 
-The JASP version the analyses run with is chosen with two inputs, which the reusable
-unit-test workflow passes on as `jasp_version` and `jaspsyntax`:
+The JASP version the analyses run with, and where jaspSyntax comes from, is chosen
+with two inputs, which the reusable unit-test workflow passes on as `r_universe` and
+`jaspsyntax`:
 
-- `jasp-version`: `development` (default), or the tag of a JASP release (e.g.
-  `v0.99.0.2`). It is exported as `JASPTOOLS_JASP_VERSION`, so
-  `jaspTools::setupJaspTools()` installs the jaspSyntax of that release from GitHub
-  and takes the html files and data sets of the jasp-desktop commit it was built from.
-- `jaspsyntax`: the jaspSyntax of the development version: `r-universe` (default,
-  built from jaspSyntax `master`), or a jaspSyntax branch, tag or commit on GitHub,
-  built in the job, e.g. `master` or the branch of a jaspSyntax pull request. Only its
+- `r-universe`: `true` runs with JASP development and the jaspSyntax built on the
+  R-universe (from jaspSyntax `master`); `jaspsyntax` is then ignored. `false`
+  installs jaspSyntax from GitHub, as named by `jaspsyntax`.
+- `jaspsyntax`, with `r-universe: false`: a jaspSyntax branch or commit (default
+  `master`; `development` means `master` too) runs with JASP development and that
+  jaspSyntax, built in the job, e.g. the branch of a jaspSyntax pull request. Only its
   R code comes from that ref: the SyntaxInterface library is the release its
-  `configure` points at, so jasp-desktop changes need a library build first. The
-  older `jaspsyntax-source` (`r-universe` or `github` for `master`) is still read
-  when `jaspsyntax` is empty.
+  `configure` points at, so jasp-desktop changes need a library build first. A tag
+  with a [jaspSyntax release](https://github.com/jasp-stats/jaspSyntax/releases)
+  (e.g. `v0.99.0.2`) runs with that JASP version: it is exported as
+  `JASPTOOLS_JASP_VERSION`, so `jaspTools::setupJaspTools()` installs the jaspSyntax
+  of that release and takes the html files and data sets of the jasp-desktop commit
+  it was built from.
 
-Empty values mean the defaults, so a module can pass its `workflow_dispatch` inputs
-straight through and still get development and r-universe on other events.
+The reusable workflow's `r_universe` is a string, so a module passes its checkbox as
+`format('{0}', inputs.r_universe)`, which is empty on events other than a manual run:
+the workflow then uses JASP development and the R-universe. When `r-universe` is
+empty, the older inputs decide as before: `jasp-version` (`development` or a release
+tag), `jaspsyntax` (`r-universe` or a GitHub ref) and `jaspsyntax-source`
+(`r-universe`, or `github` for `master`).
 
 The workflows retain their own job matrices, schedule checks, unit tests,
 environment artifacts, coverage calculation, and Codecov upload. Coverage

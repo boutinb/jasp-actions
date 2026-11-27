@@ -13,6 +13,10 @@ inputs:
     description: 'Whether JAGS is required (true or false).'
     required: false
     default: 'false'
+  r-universe:
+    description: 'true: JASP development with the jaspSyntax built on the R-universe (jaspsyntax is ignored). false: jaspSyntax from GitHub, jaspsyntax naming a branch or commit (JASP development) or a release tag (that JASP version). Empty means the inputs below decide (jasp-version, jaspsyntax, jaspsyntax-source).'
+    required: false
+    default: ''
   jasp-version:
     description: 'JASP version to run the analyses with: development, or the tag of a JASP release (e.g. v0.99.1). Empty means development.'
     required: false
@@ -35,10 +39,34 @@ runs:
         JASP_VERSION: ${{ inputs.jasp-version || 'development' }}
         JASPSYNTAX: ${{ inputs.jaspsyntax }}
         JASPSYNTAX_SOURCE: ${{ inputs.jaspsyntax-source || 'r-universe' }}
+        R_UNIVERSE: ${{ inputs.r-universe }}
       run: |
         case "$PACKAGE_SETUP" in
           lockfile|latest) ;;
           *) echo "::error::packages must be lockfile or latest"; exit 1 ;;
+        esac
+        case "$R_UNIVERSE" in
+          true)
+            JASP_VERSION=development
+            JASPSYNTAX=r-universe ;;
+          false)
+            REF="${JASPSYNTAX:-master}"
+            [ "$REF" = "development" ] && REF=master   # jaspSyntax has no development branch: master goes with JASP development
+            if [ "$REF" = "r-universe" ] || ! [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::error::Without r-universe, jaspsyntax must be a jaspSyntax branch, commit or release tag, not '$REF'"; exit 1
+            fi
+            # A ref with a jaspSyntax release (every full build uploads SHA256SUMS) is a JASP version:
+            # jaspTools::setupJaspTools() installs it. jaspTools itself needs some jaspSyntax to install first.
+            if curl -fsIL -o /dev/null "https://github.com/jasp-stats/jaspSyntax/releases/download/$REF/SHA256SUMS"; then
+              echo "jaspSyntax $REF is a release: running with JASP $REF"
+              JASP_VERSION="$REF"
+              JASPSYNTAX=r-universe
+            else
+              JASP_VERSION=development
+              JASPSYNTAX="$REF"
+            fi ;;
+          "") ;;
+          *) echo "::error::r-universe must be true, false or empty"; exit 1 ;;
         esac
         if [ -z "$JASPSYNTAX" ]; then
           case "$JASPSYNTAX_SOURCE" in
@@ -62,7 +90,11 @@ runs:
         # JASPSYNTAX_REF is the GitHub ref; empty means the R-universe
         if [ "$JASPSYNTAX" = "r-universe" ]; then JASPSYNTAX_REF=""; else JASPSYNTAX_REF="$JASPSYNTAX"; fi
         echo "JASPSYNTAX_REF=$JASPSYNTAX_REF" >> "$GITHUB_ENV"
-        echo "JASP version: $JASP_VERSION, jaspSyntax of the development version from: ${JASPSYNTAX_REF:+GitHub }$JASPSYNTAX"
+        if [ "$JASP_VERSION" = "development" ]; then
+          echo "JASP development, jaspSyntax from: ${JASPSYNTAX_REF:+GitHub }$JASPSYNTAX"
+        else
+          echo "JASP $JASP_VERSION: jaspTools::setupJaspTools() installs the jaspSyntax of that release from GitHub"
+        fi
         # GITHUB_ENV also makes these settings available to the caller's
         # subsequent test or coverage steps.
         cat >> "$GITHUB_ENV" <<'EOF'
