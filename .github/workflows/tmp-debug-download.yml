@@ -1,30 +1,36 @@
-name: TEMP debug download on Windows
+name: TEMP profile lockfile tests
 on:
   push:
     branches: [tmpDebugWinDownload]
 jobs:
-  debug:
-    runs-on: windows-latest
+  profile:
+    strategy:
+      fail-fast: false
+      matrix:
+        packages: [lockfile, latest]
+    runs-on: ubuntu-latest
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
           repository: jasp-stats/jaspDescriptives
-      - name: Set up the test environment (development)
+      - name: Set up the test environment
         uses: boutinb/jasp-actions/setup-r-test-env@rUniverseCheckbox
         with:
-          packages: lockfile
-      - name: Release check in the module's renv project
+          packages: ${{ matrix.packages }}
+      - name: Profile one slow test file
         run: |
-          cat("method option:", format(getOption("download.file.method")), "| timeout:", getOption("timeout"),
-              "| download.file is base:", identical(utils::download.file, get("download.file", envir = asNamespace("utils"))), "\n")
-          print(Sys.getenv(c("R_LIBCURL_SSL_REVOKE_BEST_EFFORT", "CURL_CA_BUNDLE", "http_proxy", "https_proxy")))
-          url <- "https://github.com/jasp-stats/jaspSyntax/releases/download/v0.99.0.2/SHA256SUMS"
-          f <- tempfile()
-          print(system.time(r <- try(utils::download.file(url, destfile = f, quiet = FALSE, mode = "wb"))))
-          print(r); print(file.exists(f))
-          print(system.time(print(jaspTools:::jaspSyntaxReleaseExists("v0.99.0.2"))))
-          print(packageVersion("jaspTools")); print(utils::packageDescription("jaspTools")$RemoteSha)
-          print(body(jaspTools:::jaspSyntaxReleaseExists))
+          library(jaspTools); library(testthat)
+          jaspTools:::setPkgOption("module.dirs", getwd())
+          f <- "tests/testthat/test-time-descriptives-ordering.R"
+          # a short slice: the first ~10 runAnalysis calls are enough to see where time goes
+          Rprof("prof.out", interval = 0.02, line.profiling = FALSE)
+          t <- system.time(try(testthat::test_file(f, reporter = "summary", stop_on_failure = FALSE)))
+          Rprof(NULL)
+          print(t)
+          s <- summaryRprof("prof.out")
+          cat("\n== by.total (top 40)\n"); print(head(s$by.total, 40))
+          cat("\n== by.self (top 25)\n"); print(head(s$by.self, 25))
         shell: Rscript {0}
+        timeout-minutes: 60
