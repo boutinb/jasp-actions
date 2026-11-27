@@ -27,16 +27,16 @@ on:
         type: string
         required: false
         default: 'development'
-      jaspsyntax_source:
-        description: 'Where the jaspSyntax of the development version comes from: r-universe or github. Empty means r-universe.'
-        type: string
-        required: false
-        default: 'r-universe'
-      jaspsyntax_ref:
-        description: 'jaspSyntax branch, tag or commit for jaspsyntax_source github. Empty means master.'
+      jaspsyntax:
+        description: 'The jaspSyntax of the development version: r-universe, or a jaspSyntax branch, tag or commit on GitHub (e.g. master). Empty means jaspsyntax_source.'
         type: string
         required: false
         default: ''
+      jaspsyntax_source:
+        description: 'Older form of jaspsyntax, used when that is empty: r-universe or github (jaspSyntax master). Empty means r-universe.'
+        type: string
+        required: false
+        default: 'r-universe'
 
 jobs:
   scheduled-run-check:
@@ -89,8 +89,8 @@ jobs:
           packages: ${{ matrix.packages }}
           needs-jags: ${{ inputs.needs_JAGS }}
           jasp-version: ${{ inputs.jasp_version }}
+          jaspsyntax: ${{ inputs.jaspsyntax }}
           jaspsyntax-source: ${{ inputs.jaspsyntax_source }}
-          jaspsyntax-ref: ${{ inputs.jaspsyntax_ref }}
 
       - name: Record unit-test environment
         id: record-test-environment
