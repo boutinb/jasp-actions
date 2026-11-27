@@ -22,6 +22,11 @@ on:
         type: number
         required: false
         default: 30
+      r_universe:
+        description: "'true': JASP development with the jaspSyntax built on the R-universe (jaspsyntax is ignored). 'false': jaspSyntax from GitHub, jaspsyntax naming a branch or commit (JASP development) or a release tag (that JASP version). A string, so a module can pass its checkbox with format('{0}', inputs.r_universe); empty means jasp_version, jaspsyntax and jaspsyntax_source decide."
+        type: string
+        required: false
+        default: ''
       jasp_version:
         description: 'JASP version to run the analyses with: development, or the tag of a JASP release (e.g. v0.99.1). Empty means development.'
         type: string
@@ -62,7 +67,7 @@ jobs:
     if: needs.scheduled-run-check.outputs.status == 'success'
 
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} (R ${{ matrix.r }} - ${{ matrix.packages }} packages - JASP ${{ inputs.jasp_version || 'development' }})
+    name: ${{ matrix.os }} (R ${{ matrix.r }} - ${{ matrix.packages }} packages - ${{ inputs.r_universe == 'false' && format('jaspSyntax {0}', inputs.jaspsyntax || 'master') || format('JASP {0}', inputs.jasp_version || 'development') }})
     continue-on-error: ${{ matrix.packages == 'latest' }}
 
     strategy:
@@ -90,6 +95,7 @@ jobs:
           needs-jags: ${{ inputs.needs_JAGS }}
           jasp-version: ${{ inputs.jasp_version }}
           jaspsyntax: ${{ inputs.jaspsyntax }}
+          r-universe: ${{ inputs.r_universe }}
           jaspsyntax-source: ${{ inputs.jaspsyntax_source }}
 
       - name: Record unit-test environment
