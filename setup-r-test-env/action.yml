@@ -89,6 +89,30 @@ runs:
         # setup-r-dependencies) ignores the Additional_repositories field of jaspTools.
         extra-repositories: https://jasp-stats.r-universe.dev
 
+    # A module whose .Rprofile activates renv loses that extra repository: renv sets
+    # options(repos) to the repositories of renv.lock, so pak then cannot find jaspSyntax.
+    # R reads R_PROFILE_USER instead of ./.Rprofile, so this profile runs the module's
+    # .Rprofile (or ~/.Rprofile, as R would) and then adds the R-universe back.
+    - name: Keep the jasp-stats R-universe when renv is activated
+      run: |
+        profile <- file.path(Sys.getenv("RUNNER_TEMP"), "jasp-Rprofile.R")
+        writeLines(c(
+          "# Written by jasp-actions/setup-r-test-env",
+          "local({",
+          "  profile <- if (file.exists('.Rprofile')) '.Rprofile' else path.expand('~/.Rprofile')",
+          "  if (file.exists(profile)) source(profile)",
+          "})",
+          "local({",
+          "  universe <- 'https://jasp-stats.r-universe.dev'",
+          "  repos <- getOption('repos')",
+          "  if (!universe %in% sub('/+$', '', repos))",
+          "    options(repos = c(repos, jasp = universe))",
+          "})"
+        ), profile)
+        cat("R_PROFILE_USER=", normalizePath(profile, winslash = "/"), "\n", sep = "",
+            file = Sys.getenv("GITHUB_ENV"), append = TRUE)
+      shell: Rscript --vanilla {0}
+
     # jaspSyntax needs libOpenGL.so.0 and libEGL.so.1. pak does not install them: the R-universe index
     # lists its SystemRequirements as only c++ (when it came from GitHub, pak read them from its DESCRIPTION).
     - name: Install OpenGL on Linux
