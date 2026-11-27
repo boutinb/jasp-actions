@@ -1,0 +1,48 @@
+name: TEMP debug download on Windows
+on:
+  push:
+    branches: [tmpDebugWinDownload]
+jobs:
+  debug:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.5.2'
+      - name: Install httr and renv
+        run: install.packages(c("httr", "renv"), repos = "https://cloud.r-project.org")
+        shell: Rscript {0}
+      - name: Write the probe
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/probe"
+          cat > "$RUNNER_TEMP/probe.R" <<'RS'
+          url <- "https://github.com/jasp-stats/jaspSyntax/releases/download/v0.99.0.2/SHA256SUMS"
+          cat("R", R.version.string, "| method option:", format(getOption("download.file.method")), "| timeout:", getOption("timeout"), "| libcurl:", capabilities("libcurl"), "\n")
+          try1 <- function(label, expr) {
+            t <- system.time(r <- try(expr, silent = TRUE))[["elapsed"]]
+            cat(sprintf("%-22s %6.1fs  %s\n", label, t, if (inherits(r, "try-error")) paste("ERROR:", conditionMessage(attr(r, "condition"))) else paste("ok:", format(r))))
+          }
+          options(timeout = 120)
+          try1("download default", utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb"))
+          try1("download libcurl", utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb", method = "libcurl"))
+          if (.Platform$OS.type == "windows")
+            try1("download wininet", suppressWarnings(utils::download.file(url, tempfile(), quiet = TRUE, mode = "wb", method = "wininet")))
+          try1("curlGetHeaders", attr(curlGetHeaders(url), "status"))
+          try1("httr::HEAD", httr::status_code(httr::HEAD(url)))
+          try1("httr::GET", httr::status_code(httr::GET(url)))
+          RS
+      - name: Probe in plain R
+        run: Rscript "$RUNNER_TEMP/probe.R"
+        shell: bash
+      - name: Probe in an renv project
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/probe"
+          Rscript -e 'renv::init(bare = TRUE, restart = FALSE)' > /dev/null 2>&1 || true
+          ls -a
+          Rscript "$RUNNER_TEMP/probe.R"
